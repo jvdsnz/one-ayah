@@ -87,6 +87,13 @@ button.stat{cursor:pointer}
 .w:hover{background:var(--accent-soft)}
 .w.on,.w.on:hover{background:var(--hl);color:var(--hl-ink)}
 .arabic .num{font-size:.62em;color:var(--num);white-space:nowrap}
+/* full page view: every ayah on the mushaf page, read straight through */
+.arabic .pg-surah{display:block;text-align:center;font-size:.8em;color:var(--muted);margin:12px 0 0}
+.arabic .pg-bism{display:block;text-align:center;font-size:.7em;color:var(--muted);margin:0 0 4px}
+.translit.page,.english.page{text-align:left}
+.translit.page .ay,.english.page .ay{display:block;margin:0 0 8px}
+.translit .num,.english .num{font-style:normal;font-size:12px;color:var(--num);margin-right:4px}
+.pg-link{border:0;background:none;padding:0;color:inherit;font:inherit;text-decoration:underline;text-underline-offset:2px}
 .veil .w{filter:blur(10px);user-select:none}
 .veil .w.cue{filter:none}
 .translit{text-align:center;margin:8px 0 6px;color:var(--tr);font-style:italic;line-height:1.9}
@@ -237,13 +244,15 @@ h3.sub{font-size:14px;margin:18px 0 4px}
       <button class="chip" id="chipRepeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg><span id="repLabel">Repeat ×3</span></button>
       <button class="chip" id="chipSpeed">Speed 1×</button>
       <button class="chip" id="chipAuto" aria-pressed="false">Continue to next</button>
+      <button class="chip" id="chipPage" aria-pressed="false">Full page</button>
     </div>
 
     <div class="actions" id="learnActions">
       <button class="btn" id="btnHide" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Hide Arabic</span></button>
-      <button class="btn" id="btnSkip"><span>Next ayah</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></button>
       <button class="btn" id="btnMark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Bookmark</span></button>
-      <button class="btn primary" id="btnMem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg><span>Mark memorised</span></button>
+      <button class="btn" id="btnSkip"><span>Next ayah</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></button>
+      <button class="btn" id="btnSkipPage"><span>Next page</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 5l7 7-7 7M12 5l7 7-7 7"/></svg></button>
+      <button class="btn primary wide" id="btnMem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg><span>Mark memorised</span></button>
     </div>
     <div class="actions" id="revealActions" hidden>
       <button class="btn primary wide" id="btnReveal">Show ayah</button>
@@ -261,7 +270,7 @@ h3.sub{font-size:14px;margin:18px 0 4px}
     <button id="navPrev">‹ Previous</button>
     <button id="navContinue">Continue where I left off ›</button>
   </div>
-  <p class="foot">Arabic: Tanzil Uthmani (Hafs), checked against the King Fahd Complex text · Translation: Sahih International · Recitation &amp; word timings: quran.com, everyayah.com</p>
+  <p class="foot">Arabic: Tanzil Uthmani (Hafs, tanzil.net), checked against the King Fahd Complex text · Translation: Sahih International · Recitation &amp; word timings: quran.com, everyayah.com</p>
 </main>
 
 <section class="welcome" id="welcome" hidden>
@@ -438,9 +447,9 @@ function wordAt(tm, cs){
 /* ---------- state ---------- */
 const KEY = "hifz.v1";
 const REPEATS = [1,3,5,10,20,0]; // 0 = until stopped
-const SPEEDS = [1,0.75,0.5];
+const SPEEDS = [1,1.5,2,0.75,0.5];   // the chip cycles in this order
 const GOALS = [1,2,3,5,10];
-const DEF = {v:3,s:1,a:1,reciter:Q.r[0].id,repeat:3,auto:false,hide:false,showTr:true,showEn:true,speed:1,
+const DEF = {v:3,s:1,a:1,reciter:Q.r[0].id,repeat:3,auto:false,hide:false,showTr:true,showEn:true,speed:1,view:"ayah",
   arSize:34,goal:1,theme:"auto",marks:[],cards:{},days:{},onboarded:false,remind:{on:false,time:"07:00"},lastBackup:null,u:0,proj:null,projNote:null};
 let st = load();
 function load(){
@@ -469,6 +478,8 @@ function normalise(raw){
   if(!("onboarded" in raw) && (raw.mem || raw.cards || raw.days || raw.marks)) s.onboarded = true;
   if(!s.remind || typeof s.remind!=="object") s.remind = {...DEF.remind};
   if(!GOALS.includes(s.goal)) s.goal = 1;
+  if(!SPEEDS.includes(s.speed)) s.speed = 1;
+  if(s.view!=="page") s.view = "ayah";
   s.v = 3;
   return s;
 }
@@ -560,31 +571,53 @@ const plural = (n,one,many) => `${n.toLocaleString("en")} ${n===1?one:many}`;
 const SURAH_KEYS = Q.s.map((x,i)=>Array.from({length:x[4]},(_,j)=>key(i+1,j+1)));
 const JUZ_KEYS = Array.from({length:30},()=>[]);
 Q.a.forEach((arr,si)=>arr.forEach((x,ai)=>JUZ_KEYS[x[3]-1].push(key(si+1,ai+1))));
+// ayah keys per mushaf page (Madani, 604 pages); PAGE_KEYS[p] for p = 1..604
+const NPAGES = 604;
+const PAGE_KEYS = Array.from({length:NPAGES+1},()=>[]);
+Q.a.forEach((arr,si)=>arr.forEach((x,ai)=>PAGE_KEYS[x[4]].push(key(si+1,ai+1))));
+const pageOf = (s,a) => ayah(s,a)[4];
+const BISM = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
 
 /* ---------- review session ---------- */
 let review = null;   // {queue:[keys], i, revealed, from}
 let revealed = false;
+// Full page view (revision always goes one ayah at a time)
+const pageMode = () => st.view==="page" && !review;
+const viewKeys = () => pageMode() ? PAGE_KEYS[pageOf(st.s,st.a)] : [key(st.s,st.a)];
+const splitKey = k => k.split(":").map(Number);
 
 /* ---------- render ---------- */
 function render(){
   const [sar,sen,smean,stype,cnt] = surah(st.s);
   const [arW,trW,en,juz,page] = ayah(st.s,st.a);
-  const inReview = !!review;
+  const inReview = !!review, pg = pageMode(), keys = viewKeys();
   $("sAr").textContent = sar;
   $("sEn").textContent = `${st.s}. ${sen} · ${smean}`;
   const done = SURAH_KEYS[st.s-1].filter(k=>st.cards[k]).length;
   $("sMeta").textContent = `${stype} · ${cnt} ayaat · Juz ${juz} · ${done}/${cnt} memorised`;
-  $("ayahPos").textContent = `Ayah ${st.a} of ${cnt} · Page ${page}`;
-  $("bism").hidden = !(st.a===1 && st.s!==1 && st.s!==9);
+  $("ayahPos").innerHTML = (pg ? `${plural(keys.length,"ayah","ayaat")} · ` : `Ayah ${st.a} of ${cnt} · `)
+    + `<button class="pg-link" id="pageLink" aria-label="Go to page">Page ${page}${pg?" of "+NPAGES:""}</button>`;
+  $("pageLink").onclick = ()=>surahSheet(true);
+  $("bism").hidden = pg || !(st.a===1 && st.s!==1 && st.s!==9);
 
-  // words
+  // words: one .ay group per ayah shown (one in ayah view, the whole page in page view)
   const veil = inReview ? !review.revealed : (st.hide && !revealed);
+  const cur = key(st.s,st.a);
+  let arH="", trH="", enH="";
+  for(const k of keys){
+    const [s,a] = splitKey(k), [aw,tw,e] = ayah(s,a);
+    if(pg && a===1){ arH += `<span class="pg-surah">${esc(surah(s)[0])}</span>`; if(s!==1 && s!==9) arH += `<span class="pg-bism">${BISM}</span>`; }
+    arH += `<span class="ay" data-k="${k}">` + aw.map((w,i)=>`<span class="w${inReview&&i===0?" cue":""}" data-i="${i}">${esc(w)}</span>`).join(" ")
+      + ` <span class="num">﴿${arNum(a)}﴾</span></span> `;
+    trH += `<span class="ay" data-k="${k}">` + (pg?`<span class="num">${k}</span>`:"") + tw.map((w,i)=>`<span class="w" data-i="${i}">${esc(w)}</span>`).join(" ") + `</span>`;
+    enH += pg ? `<span class="ay" data-k="${k}"><span class="num">${k}</span>${esc(e)}</span>` : esc(e);
+  }
+  for(const id of ["arabic","translit","english"]) $(id).classList.toggle("page", pg);
   $("arabic").classList.toggle("veil", veil);
-  $("arabic").innerHTML = arW.map((w,i)=>`<span class="w${inReview&&i===0?" cue":""}" data-i="${i}">${esc(w)}</span>`).join(" ")
-    + ` <span class="num">﴿${arNum(st.a)}﴾</span>`;
-  $("translit").innerHTML = trW.map((w,i)=>`<span class="w" data-i="${i}">${esc(w)}</span>`).join(" ");
+  $("arabic").innerHTML = arH;
+  $("translit").innerHTML = trH;
   $("translit").classList.toggle("off", !st.showTr || veil);
-  $("english").textContent = en;  $("english").classList.toggle("off", !st.showEn && !inReview);
+  $("english").innerHTML = enH;  $("english").classList.toggle("off", !st.showEn && !inReview);
   $("revealHint").hidden = !veil;
   $("revealHint").textContent = inReview ? "Recite the ayah from memory, then tap Show ayah" : "Recite from memory, then tap the text to reveal";
   document.documentElement.style.setProperty("--ar-size", st.arSize+"px");
@@ -597,18 +630,25 @@ function render(){
   $("chipRepeat").setAttribute("aria-pressed", st.repeat!==1);
   $("chipSpeed").textContent = `Speed ${st.speed}×`;
   $("chipSpeed").setAttribute("aria-pressed", st.speed!==1);
-  $("chipAuto").hidden = $("chipRepeat").hidden = inReview;
+  $("chipAuto").hidden = $("chipRepeat").hidden = $("chipPage").hidden = inReview;
+  $("chipPage").setAttribute("aria-pressed", st.view==="page");
 
-  // memorised state
-  const card = st.cards[key(st.s,st.a)];
-  $("memPill").hidden = !card || inReview;
-  if(card){ const n=daysBetween(today(),card.d); $("memPill").textContent = n<=0 ? "Memorised · revise today" : `Memorised · revise in ${n} day${n===1?"":"s"}`; }
-  $("btnMem").querySelector("span").textContent = card ? "Memorised" : "Mark memorised";
-  $("btnMem").classList.toggle("primary",!card);
+  // memorised state (page view: the whole page counts)
+  const memd = keys.filter(k=>st.cards[k]), allMem = memd.length===keys.length;
+  $("memPill").hidden = !memd.length || inReview;
+  if(memd.length){
+    if(allMem){ const n=Math.min(...memd.map(k=>daysBetween(today(),st.cards[k].d)));
+      $("memPill").textContent = n<=0 ? "Memorised · revise today" : `Memorised · revise in ${n} day${n===1?"":"s"}`; }
+    else $("memPill").textContent = `${memd.length}/${keys.length} memorised`;
+  }
+  $("btnMem").querySelector("span").textContent = allMem ? "Memorised" : "Mark memorised";
+  $("btnMem").classList.toggle("primary",!allMem);
   const isMark = st.marks.some(m=>m.s===st.s&&m.a===st.a);
   $("btnMark").querySelector("span").textContent = isMark ? "Bookmarked" : "Bookmark";
   $("btnMark").querySelector("svg").setAttribute("fill", isMark ? "currentColor" : "none");
   $("btnSkip").disabled = st.s===114 && st.a===surah(114)[4];
+  $("btnSkip").hidden = pg; $("btnSkipPage").classList.toggle("wide", pg);
+  $("btnSkipPage").disabled = page===NPAGES;
 
   // mode: learn vs review
   $("reviewBar").hidden = !inReview;
@@ -625,7 +665,7 @@ function render(){
     }
   }
   $("tip").hidden = veil;
-  $("navPrev").disabled = st.s===1 && st.a===1;
+  $("navPrev").disabled = pg ? page===1 : (st.s===1 && st.a===1);
   const hasT = !!Q.r[rIdx()].seg;
   if(!playing && !$("status").classList.contains("err")) setStatus(hasT ? "" : "Word highlighting isn't available for this reciter");
   renderStats();
@@ -688,12 +728,13 @@ let curWord = -1;
 function highlight(i, force){
   if(i===curWord && !force) return;
   curWord = i;
+  const k = key(st.s,st.a), word = box => box.querySelector(`.ay[data-k="${k}"] .w[data-i="${i}"]`);
   for(const box of [$("arabic"),$("translit")]){
     box.querySelectorAll(".w.on").forEach(e=>e.classList.remove("on"));
-    if(i>=0){ const el = box.querySelector(`.w[data-i="${i}"]`); if(el) el.classList.add("on"); }
+    if(i>=0){ const el = word(box); if(el) el.classList.add("on"); }
   }
   if(i>=0 && !force){
-    const el = $("arabic").querySelector(`.w[data-i="${i}"]`);
+    const el = word($("arabic"));
     if(el){ const r=el.getBoundingClientRect(); if(r.bottom>innerHeight-20 || r.top<70) el.scrollIntoView({block:"center",behavior:"smooth"}); }
   }
 }
@@ -724,6 +765,15 @@ function step(d,opts){
   else if(a>surah(s)[4]){ if(s===114) return false; s++; a=1; }
   go(s,a,opts); return true;
 }
+// To the first ayah of the page d pages away.
+function stepPage(d,opts){
+  const p = pageOf(st.s,st.a)+d;
+  if(p<1 || p>NPAGES) return false;
+  goPage(p,opts); return true;
+}
+function goPage(p,opts){ p=Math.max(1,Math.min(NPAGES,Math.round(p)||1)); const [s,a]=splitKey(PAGE_KEYS[p][0]); go(s,a,opts); }
+// Previous / next: a page at a time in page view, otherwise an ayah.
+const move = (d,opts) => pageMode() ? stepPage(d,opts) : step(d,opts);
 // After the ayah learned most recently in the app (marked-as-prior ayaat don't count), the next one not yet memorised.
 function nextUnmemorised(){
   let best=null, bt="";
@@ -744,10 +794,11 @@ let playing=false, plays=0, gapTimer=null;
 function audioUrl(s,a){ return Q.r[rIdx()].url.replace("{sa}", pad3(s)+pad3(a)); }
 function setStatus(t,err){ $("status").textContent=t; $("status").classList.toggle("err",!!err); }
 function setPlayIcon(on){ $("icoPlay").innerHTML = on ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>'; $("btnPlay").setAttribute("aria-label",on?"Pause":"Play"); }
-function playAyah(fromStart=true){
+// keepCount: page view moving on to the next ayah of the same page play (the repeat counts whole pages)
+function playAyah(fromStart=true, keepCount=false){
   clearTimeout(gapTimer); wordAudio.pause();
   const u = audioUrl(st.s,st.a);
-  if(audio.src!==u){ audio.src=u; plays=0; }
+  if(audio.src!==u){ audio.src=u; if(!keepCount) plays=0; }
   if(fromStart) audio.currentTime=0;
   audio.playbackRate = st.speed;
   playing=true; setPlayIcon(true); updateRepStatus();
@@ -757,7 +808,7 @@ function playAyah(fromStart=true){
 }
 function updateRepStatus(){
   if(!playing) return;
-  setStatus(`${Q.r[rIdx()].name} · play ${plays+1}${st.repeat&&!review?` of ${st.repeat}`:""}${st.speed!==1?` · ${st.speed}×`:""}`);
+  setStatus(`${Q.r[rIdx()].name}${pageMode()?` · ${st.s}:${st.a}`:""} · play ${plays+1}${st.repeat&&!review?` of ${st.repeat}`:""}${st.speed!==1?` · ${st.speed}×`:""}`);
 }
 function stopAudio(){ clearTimeout(gapTimer); audio.pause(); playing=false; plays=0; setPlayIcon(false); setStatus(""); highlight(-1); }
 function togglePlay(){
@@ -765,7 +816,18 @@ function togglePlay(){
   else playAyah(audio.ended || !audio.currentTime || audio.src!==audioUrl(st.s,st.a));
 }
 audio.addEventListener("play",()=>{ if(!raf) raf=requestAnimationFrame(tick); });
+// Page view: play every ayah on the page in order; Repeat and Continue apply to the whole page.
+function playInPage(k){ const [s,a]=splitKey(k); st.s=s; st.a=a; save(); curWord=-1; render(); playAyah(true,true); }
+function pageEnded(){
+  const ks = PAGE_KEYS[pageOf(st.s,st.a)], i = ks.indexOf(key(st.s,st.a));
+  if(i < ks.length-1){ gapTimer=setTimeout(()=>{ if(playing) playInPage(ks[i+1]); },300); return; }
+  plays++;
+  if(st.repeat===0 || plays<st.repeat) gapTimer=setTimeout(()=>{ if(playing) playInPage(ks[0]); },700);
+  else if(st.auto) gapTimer=setTimeout(()=>{ if(playing && !stepPage(1,{play:true})) stopAudio(); },700);
+  else { playing=false; plays=0; setPlayIcon(false); setStatus("Done — play again or move on"); }
+}
 audio.addEventListener("ended",()=>{
+  if(pageMode()){ highlight(-1); pageEnded(); return; }
   plays++; highlight(-1);
   const repeatLimit = review ? 1 : st.repeat;
   if(repeatLimit===0 || plays<repeatLimit){
@@ -796,6 +858,7 @@ function unlearn(k){
   if(!c.p && c.m && st.days[c.m] && st.days[c.m].n>0) st.days[c.m].n--;
 }
 function toggleMem(){
+  if(pageMode()) return togglePageMem();
   const k=key(st.s,st.a), d=today();
   if(st.cards[k]){
     if(!confirm("Remove this ayah from your memorised list? Its revision history will be cleared.")) return;
@@ -806,6 +869,24 @@ function toggleMem(){
     toast(r.n===st.goal ? "Today's goal reached. Barak Allahu feek." : "Memorised — first revision tomorrow");
   }
   save(); render(); syncReminders();
+}
+// Page view: Mark memorised learns every ayah on the page not memorised yet (they count as new today).
+function togglePageMem(){
+  const ks=viewKeys(), d=today(), add=ks.filter(k=>!st.cards[k]);
+  if(!add.length){
+    if(!confirm(`Remove all ${ks.length} ayaat on this page from your memorised list? Their revision history will be cleared.`)) return;
+    ks.forEach(unlearn); toast(`Page ${pageOf(st.s,st.a)} cleared`);
+  } else {
+    add.forEach(k=>{ st.cards[k] = {...SRS.newCard(d), m:d}; });
+    const r=dayRec(d), before=r.n; r.n+=add.length;
+    toast(before<st.goal && r.n>=st.goal ? "Today's goal reached. Barak Allahu feek." : `${plural(add.length,"ayah","ayaat")} memorised — first revision tomorrow`);
+  }
+  save(); render(); syncReminders();
+}
+function togglePageView(){
+  st.view = st.view==="page" ? "ayah" : "page";
+  if(st.view==="page"){ const [s,a]=splitKey(PAGE_KEYS[pageOf(st.s,st.a)][0]); st.s=s; st.a=a; }
+  stopAudio(); curWord=-1; revealed=false; save(); render();
 }
 // Mark a whole surah or juz as already memorised (or clear it). Returns how many ayaat changed.
 function markGroup(keys, on){
@@ -866,13 +947,18 @@ function closeSheet(){ $("scrim").classList.remove("on"); $("sheet").classList.r
 function el(tag,cls,html){ const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; }
 const seg=(opts,cur,on)=>{ const s=el("div","seg"); opts.forEach(([v,l])=>{ const x=el("button",null,l); x.setAttribute("aria-pressed",v===cur); x.onclick=()=>{ on(v); [...s.children].forEach(c=>c.setAttribute("aria-pressed",c===x)); }; s.append(x); }); return s; };
 
-function surahSheet(){
+function surahSheet(focusPage){
   if(review) return;
   openSheet("Surahs",b=>{
     const j=el("div","field",`<label>Go to ayah<small>e.g. 2:255</small></label>`);
-    const ji=el("input","search"); ji.style.maxWidth="140px"; ji.placeholder="2:255"; ji.inputMode="numeric";
+    const ji=el("input","search"); ji.style.maxWidth="140px"; ji.placeholder="2:255"; ji.inputMode="numeric"; ji.id="goAyah";
     ji.onkeydown=e=>{ if(e.key==="Enter"){ const [s,a]=ji.value.split(/[:\s.]/).map(Number); if(s>=1&&s<=114){ closeSheet(); go(s,a||1);} } };
     j.append(ji); b.append(j);
+    const jp=el("div","field",`<label>Go to page<small>1 to ${NPAGES}</small></label>`);
+    const pi=el("input","search"); pi.style.maxWidth="140px"; pi.placeholder=String(pageOf(st.s,st.a)); pi.inputMode="numeric"; pi.id="goPage";
+    pi.onkeydown=e=>{ if(e.key==="Enter"){ const p=parseInt(pi.value,10); if(p>=1&&p<=NPAGES){ closeSheet(); goPage(p);} else toast(`Pages run from 1 to ${NPAGES}`); } };
+    jp.append(pi); b.append(jp);
+    if(focusPage===true){ setTimeout(()=>pi.focus(),250); focusPage="done"; }
     const inp=el("input","search"); inp.placeholder="Search by name or number"; b.append(inp);
     const list=el("div"); b.append(list);
     const norm=t=>t.toLowerCase().replace(/[-'`\s]/g,"");
@@ -889,7 +975,7 @@ function surahSheet(){
       if(!list.children.length) list.append(el("div","empty","No surah matches"));
     };
     inp.oninput=draw; draw();
-    setTimeout(()=>inp.focus(),250);
+    if(focusPage!=="done") setTimeout(()=>inp.focus(),250);
   });
 }
 function marksSheet(){
@@ -978,7 +1064,7 @@ function settingsSheet(){
     f(b,"Daily goal","New ayaat to memorise each day",seg(GOALS.map(v=>[v,String(v)]),st.goal,v=>{st.goal=v;save();renderStats();syncReminders();}));
     f(b,"Daily reminder",Native.on?"":"Reminders arrive in the phone app",reminderControls());
     f(b,"Repeat each ayah","",seg(REPEATS.map(v=>[v,v?"×"+v:"∞"]),st.repeat,v=>{st.repeat=v;save();render();}));
-    f(b,"Speed","Slower helps pronunciation",seg(SPEEDS.map(v=>[v,v+"×"]),st.speed,v=>{st.speed=v;audio.playbackRate=v;save();render();}));
+    f(b,"Speed","Slower helps pronunciation",seg([...SPEEDS].sort((x,y)=>x-y).map(v=>[v,v+"×"]),st.speed,v=>{st.speed=v;audio.playbackRate=v;save();render();}));
     f(b,"Transliteration","",seg([[true,"Show"],[false,"Hide"]],st.showTr,v=>{st.showTr=v;save();render();}));
     f(b,"English meaning","",seg([[true,"Show"],[false,"Hide"]],st.showEn,v=>{st.showEn=v;save();render();}));
     const rng=el("input"); rng.type="range"; rng.min=24; rng.max=56; rng.value=st.arSize;
@@ -1035,10 +1121,12 @@ function welcome(){
 
 /* ---------- wiring ---------- */
 $("btnPlay").onclick=togglePlay;
-$("btnPrev").onclick=()=>step(-1,{play:playing});
-$("btnNext").onclick=()=>step(1,{play:playing});
+$("btnPrev").onclick=()=>move(-1,{play:playing});
+$("btnNext").onclick=()=>move(1,{play:playing});
 $("btnSkip").onclick=()=>step(1,{play:playing});
-$("navPrev").onclick=()=>step(-1);
+$("btnSkipPage").onclick=()=>stepPage(1,{play:playing});
+$("navPrev").onclick=()=>move(-1);
+$("chipPage").onclick=togglePageView;
 $("navContinue").onclick=()=>{ const [s,a]=nextUnmemorised(); go(s,a); };
 $("chipRepeat").onclick=()=>{ const i=REPEATS.indexOf(st.repeat); st.repeat=REPEATS[(i+1)%REPEATS.length]; save(); render(); updateRepStatus(); };
 $("chipSpeed").onclick=()=>{ const i=SPEEDS.indexOf(st.speed); st.speed=SPEEDS[(i+1)%SPEEDS.length]; audio.playbackRate=st.speed; save(); render(); updateRepStatus(); };
@@ -1047,7 +1135,10 @@ $("btnHide").onclick=toggleHide;
 function wordClick(e){
   const w = e.target.closest(".w");
   if($("arabic").classList.contains("veil")){ if(!review){ revealed=true; render(); } return; }
-  if(w) playWord(+w.dataset.i);
+  if(!w) return;
+  const k = w.closest(".ay").dataset.k;
+  if(k!==key(st.s,st.a)){ const [s,a]=splitKey(k); go(s,a); }   // page view: a word in another ayah
+  playWord(+w.dataset.i);
 }
 $("arabic").onclick=wordClick; $("translit").onclick=wordClick;
 $("btnMem").onclick=toggleMem;
@@ -1057,7 +1148,7 @@ $("progress").onclick=()=>progressSheet();
 $("btnReveal").onclick=revealReview;
 $("reviewExit").onclick=endReview;
 document.querySelectorAll("#gradeActions .grade").forEach(b=>b.onclick=()=>grade(+b.dataset.g));
-$("btnSurahs").onclick=surahSheet; $("surahHead").onclick=surahSheet;
+$("btnSurahs").onclick=()=>surahSheet(); $("surahHead").onclick=()=>surahSheet();
 $("btnMarks").onclick=marksSheet;
 $("btnSettings").onclick=settingsSheet;
 $("sheetClose").onclick=closeSheet; $("scrim").onclick=closeSheet;
@@ -1071,12 +1162,12 @@ document.addEventListener("keydown",e=>{
     if(!review.revealed && e.key==="Enter"){ e.preventDefault(); revealReview(); }
     else if(review.revealed && ["1","2","3","4"].includes(e.key)){ e.preventDefault(); grade(+e.key); }
   }
-  else if(e.key==="ArrowRight") step(1,{play:playing});
-  else if(e.key==="ArrowLeft") step(-1,{play:playing});
+  else if(e.key==="ArrowRight") move(1,{play:playing});
+  else if(e.key==="ArrowLeft") move(-1,{play:playing});
 });
 let tx=null;
 $("card").addEventListener("touchstart",e=>tx=e.touches[0].clientX,{passive:true});
-$("card").addEventListener("touchend",e=>{ if(tx==null||review)return; const dx=e.changedTouches[0].clientX-tx; tx=null; if(Math.abs(dx)>70) step(dx<0?1:-1,{play:playing}); });
+$("card").addEventListener("touchend",e=>{ if(tx==null||review)return; const dx=e.changedTouches[0].clientX-tx; tx=null; if(Math.abs(dx)>70) move(dx<0?1:-1,{play:playing}); });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",applyTheme);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") doSyncReminders(); else { if(st.onboarded) dailyCheck(); render(); } });
 
@@ -1088,7 +1179,10 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
   if(LN) LN.addListener("localNotificationActionPerformed",()=>{ render(); if(SRS.due(st.cards,today()).length) startReview(); });
 })();
 
-function fromHash(){ const m=location.hash.match(/^#(\d+)(?::(\d+))?$/); if(m && +m[1]>=1 && +m[1]<=114 && !review) go(+m[1],+(m[2]||1)); }
+function fromHash(){
+  if(review) return;
+  const p=location.hash.match(/^#p(\d+)$/i); if(p && +p[1]>=1 && +p[1]<=NPAGES) return goPage(+p[1]);   // #p50 = page 50
+  const m=location.hash.match(/^#(\d+)(?::(\d+))?$/); if(m && +m[1]>=1 && +m[1]<=114) go(+m[1],+(m[2]||1)); }
 window.addEventListener("hashchange",fromHash);
 try{ localStorage.setItem(KEY, JSON.stringify(st)); }catch(e){}   // keep migrations; don't bump `u` (the phone copy may be newer)
 render(); fromHash();
@@ -1097,7 +1191,7 @@ nativeStore().then(()=>{ if(!st.onboarded) welcome(); else { dailyCheck(); doSyn
 // test hooks (read-only helpers + scheduler)
 window.__hifz = {SRS, addDays, daysBetween, timing, wordAt, go, get state(){ return st; }, get review(){ return review; },
   audio, wordAudio, today, Q, render, get curWord(){ return curWord; }, hafizDate, recentPace, planReminders,
-  SURAH_KEYS, JUZ_KEYS, markGroup, doSyncReminders, nextUnmemorised, parseBackup, backupText, restoreFrom, dailyCheck};
+  SURAH_KEYS, JUZ_KEYS, PAGE_KEYS, markGroup, stepPage, goPage, togglePageView, pageMode, doSyncReminders, nextUnmemorised, parseBackup, backupText, restoreFrom, dailyCheck};
 </script>
 </body>
 </html>
