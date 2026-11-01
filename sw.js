@@ -1,5 +1,5 @@
 // One Ayah offline cache. Audio is never cached (it streams from the recitation servers).
-const CACHE = "one-ayah-1c87e68d6127";
+const CACHE = "one-ayah-0bc30f432f1c";
 const FILES = ["./", "index.html", "manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys()
