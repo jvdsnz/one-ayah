@@ -353,7 +353,7 @@ const SRS = {
 };
 function addDays(ds,n){ const [y,m,d]=ds.split("-").map(Number); return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10); }
 function daysBetween(a,b){ const p=s=>{const [y,m,d]=s.split("-").map(Number); return Date.UTC(y,m-1,d);}; return Math.round((p(b)-p(a))/864e5); }
-function localToday(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function localToday(d=new Date()){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 const cmpKey=(x,y)=>{ const [a,b]=x.split(":").map(Number),[c,d]=y.split(":").map(Number); return a-c||b-d; };
 // ?today=YYYY-MM-DD lets tests move the clock
 const TODAY_OVERRIDE = (location.search.match(/[?&]today=(\d{4}-\d{2}-\d{2})/)||[])[1];
@@ -539,7 +539,7 @@ function parseBackup(text){
   const days = {};
   for(const [k,v] of Object.entries(d.days||{})) if(DATE_RE.test(k) && v && typeof v==="object") days[k] = {n:Math.max(0,+v.n||0), r:Math.max(0,+v.r||0)};
   const marks = (Array.isArray(d.marks)?d.marks:[]).filter(m=>m && m.s>=1 && m.s<=114 && m.a>=1 && m.a<=surah(m.s)[4]);
-  return {state: normalise({...d, cards, days, marks, onboarded:true}), exported: String(j.exported||"").slice(0,10)};
+  return {state: normalise({...d, cards, days, marks, onboarded:true}), exported: (t=>isNaN(t)?String(j.exported||"").slice(0,10):localToday(t))(new Date(j.exported||""))};   // stamped in UTC, shown as the local day
 }
 async function backup(){
   const name = `one-ayah-backup-${today()}.json`, text = backupText();
@@ -972,13 +972,18 @@ function surahSheet(focusPage){
   if(review) return;
   openSheet("Surahs",b=>{
     const j=el("div","field",`<label>Go to ayah<small>e.g. 2:255</small></label>`);
-    const ji=el("input","search"); ji.style.maxWidth="140px"; ji.placeholder="2:255"; ji.inputMode="numeric"; ji.id="goAyah";
-    ji.onkeydown=e=>{ if(e.key==="Enter"){ const [s,a]=ji.value.split(/[:\s.]/).map(Number); if(s>=1&&s<=114){ closeSheet(); go(s,a||1);} } };
-    j.append(ji); b.append(j);
+    const ji=el("input","search"); ji.style.maxWidth="110px"; ji.placeholder="2:255"; ji.inputMode="decimal"; ji.enterKeyHint="go"; ji.id="goAyah";
+    // iPhone number keypads have no Enter (and no ":"), so a Go button too, and "2.255" works.
+    const goA=()=>{ const [s,a]=ji.value.trim().split(/[:\s.,]+/).map(Number); if(s>=1&&s<=114){ ji.blur(); closeSheet(); go(s,a||1);} else toast("Type surah:ayah, e.g. 2:255 or 2.255"); };
+    ji.onkeydown=e=>{ if(e.key==="Enter") goA(); };
+    const ja=el("button","btn","Go"); ja.id="goAyahBtn"; ja.style.padding="10px 14px"; ja.onclick=goA;
+    const jw=el("div"); jw.style.cssText="display:flex;gap:8px;align-items:center"; jw.append(ji,ja); j.append(jw); b.append(j);
     const jp=el("div","field",`<label>Go to page<small>1 to ${NPAGES}</small></label>`);
-    const pi=el("input","search"); pi.style.maxWidth="140px"; pi.placeholder=String(pageOf(st.s,st.a)); pi.inputMode="numeric"; pi.id="goPage";
-    pi.onkeydown=e=>{ if(e.key==="Enter"){ const p=parseInt(pi.value,10); if(p>=1&&p<=NPAGES){ closeSheet(); goPage(p);} else toast(`Pages run from 1 to ${NPAGES}`); } };
-    jp.append(pi); b.append(jp);
+    const pi=el("input","search"); pi.style.maxWidth="110px"; pi.placeholder=String(pageOf(st.s,st.a)); pi.inputMode="numeric"; pi.enterKeyHint="go"; pi.id="goPage";
+    const goP=()=>{ const p=parseInt(pi.value,10); if(p>=1&&p<=NPAGES){ pi.blur(); closeSheet(); goPage(p);} else toast(`Pages run from 1 to ${NPAGES}`); };
+    pi.onkeydown=e=>{ if(e.key==="Enter") goP(); };
+    const pb=el("button","btn","Go"); pb.id="goPageBtn"; pb.style.padding="10px 14px"; pb.onclick=goP;
+    const pw=el("div"); pw.style.cssText="display:flex;gap:8px;align-items:center"; pw.append(pi,pb); jp.append(pw); b.append(jp);
     if(focusPage===true){ setTimeout(()=>pi.focus(),250); focusPage="done"; }
     const inp=el("input","search"); inp.placeholder="Search by name or number"; b.append(inp);
     const list=el("div"); b.append(list);
